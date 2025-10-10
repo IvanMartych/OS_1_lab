@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/child.dir/src/child.c.o CMakeFiles/child.dir/src/sum.c.o -o child 
