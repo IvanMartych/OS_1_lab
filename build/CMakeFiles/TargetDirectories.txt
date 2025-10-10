@@ -1,4 +1,0 @@
-C:/ЭТО МОЯ ПАПКА/Учёба/3 сем/Operating_System/OS_1_lab/build/CMakeFiles/parent.dir
-C:/ЭТО МОЯ ПАПКА/Учёба/3 сем/Operating_System/OS_1_lab/build/CMakeFiles/child.dir
-C:/ЭТО МОЯ ПАПКА/Учёба/3 сем/Operating_System/OS_1_lab/build/CMakeFiles/edit_cache.dir
-C:/ЭТО МОЯ ПАПКА/Учёба/3 сем/Operating_System/OS_1_lab/build/CMakeFiles/rebuild_cache.dir
