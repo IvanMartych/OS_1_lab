@@ -1,136 +1,126 @@
-#include <unistd.h>
-#include <sys/wait.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
+#include <unistd.h>   // Для системных вызовов: read, write, pipe, fork, close, STDIN_FILENO, STDOUT_FILENO
+#include <sys/wait.h> // Для ожидания завершения дочерних процессов: wait
+#include <stdlib.h>   // Для работы с памятью и процессами: exit
+#include <string.h>   // Для работы со строками: strstr
+#include <fcntl.h>    // Для работы с файлами: open, O_* константы
 
-#define BUFFER_SIZE 1024
-
-// Функция для записи строки
-void write_string(int fd, const char* str) {
+/**
+ * Функция для записи строки в файловый дескриптор
+ * Вместо printf используем системный вызов write
+ * @param fd - файловый дескриптор для записи
+ * @param str - строка для записи
+ */
+void write_str(int fd, const char* str) {
     int len = 0;
+    // Вручную подсчитываем длину строки (аналог strlen)
     while (str[len] != '\0') len++;
+    // Записываем строку с помощью системного вызова
     write(fd, str, len);
 }
 
-// Функция для чтения строки
-int read_line(int fd, char* buffer, int max_len) {
-    int total_read = 0;
-    char ch;
+/**
+ * Главная функция родительского процесса
+ * Управляет взаимодействием с пользователем и дочерним процессом
+ */
+int main() {
+    int pipe1[2]; // Массив для создания pipe: pipe1[0] - чтение, pipe1[1] - запись
     
-    while (total_read < max_len - 1) {
-        int n = read(fd, &ch, 1);
-        if (n <= 0 || ch == '\n') {
+    // Создание pipe для межпроцессного взаимодействия
+    // pipe1 будет использоваться для передачи данных от родителя к ребенку
+    if (pipe(pipe1) == -1) {
+        write_str(STDERR_FILENO, "Error: pipe creation failed\n");
+        return 1; // Завершаем программу с ошибкой
+    }
+    
+    // Запрос имени файла у пользователя для сохранения результатов
+    write_str(STDOUT_FILENO, "Enter filename: ");
+    char filename[256]; // Буфер для хранения имени файла
+    // Чтение ввода пользователя с помощью системного вызова read
+    int bytes = read(STDIN_FILENO, filename, sizeof(filename) - 1);
+    filename[bytes] = '\0'; // Завершаем строку нулевым символом
+    
+    // Убираем символ новой строки из имени файла
+    for (int i = 0; filename[i] != '\0'; i++) {
+        if (filename[i] == '\n') {
+            filename[i] = '\0'; // Заменяем \n на конец строки
             break;
         }
-        buffer[total_read++] = ch;
     }
     
-    buffer[total_read] = '\0';
-    return total_read;
-}
-
-int main() {
-    int pipe1[2]; // Родитель пишет, ребенок читает (stdin для ребенка)
-    int pipe2[2]; // Ребенок пишет, родитель читает
-    
-    // создание каналов (и обработка ошибки создания пайпов) 
-    if (pipe(pipe1) == -1 || pipe(pipe2) == -1) {
-        const char* error = "Error: pipe creation failed\n";
-        write(STDERR_FILENO, error, 30);
-        return 1;
-    }
-    
-    // Получаем имя файла от пользователя
-    write_string(STDOUT_FILENO, "Enter filename: ");
-    char filename[256];
-    int bytes_read = read_line(STDIN_FILENO, filename, sizeof(filename));
-    if (bytes_read <= 0) {
-        const char* error = "Error: reading filename failed\n";
-        write(STDERR_FILENO, error, 34);
-        return 1;
-    }
-    
+    // Создание дочернего процесса с помощью fork()
+    // После fork() программа разделяется на два идентичных процесса
     pid_t pid = fork();
     
+    // Проверка на ошибку создания процесса
     if (pid == -1) {
-        const char* error = "Error: fork failed\n";
-        write(STDERR_FILENO, error, 20);
+        write_str(STDERR_FILENO, "Error: fork failed\n");
         return 1;
     }
     
+    // Код для ДОЧЕРНЕГО процесса (pid == 0)
     if (pid == 0) {
-        // Дочерний процесс
+        // Дочерний процесс наследует открытые файловые дескрипторы родителя
         
-        // Закрываем неиспользуемые концы каналов
-        close(pipe1[1]); // Закрываем запись в pipe1
-        close(pipe2[0]); // Закрываем чтение из pipe2
+        // Закрываем конец pipe для ЗАПИСИ, так как ребенок только читает
+        close(pipe1[1]);
         
-        // Перенаправляем stdin на pipe1
+        // Перенаправляем стандартный ввод (stdin) дочернего процесса на чтение из pipe
+        // Теперь все, что родитель пишет в pipe, ребенок будет читать из stdin
         dup2(pipe1[0], STDIN_FILENO);
+        
+        // Закрываем оригинальный дескриптор чтения из pipe
         close(pipe1[0]);
         
-        // Выполняем дочернюю программу
-        char* args[] = {"./child", filename, NULL};
-        execvp(args[0], args);
+        // Заменяем образ процесса на программу child
+        // execl загружает и выполняет программу ./child с аргументом filename
+        execl("./child", "child", filename, NULL);
         
-        // Если exec не удался
-        const char* error = "Error: exec failed\n";
-        write(STDERR_FILENO, error, 20);
-        exit(1);
-    } else {
+        // Этот код выполнится только если execl не удался
+        write_str(STDERR_FILENO, "Error: exec failed\n");
+        exit(1); // Аварийное завершение дочернего процесса
+    } 
+    // Код для РОДИТЕЛЬСКОГО процесса (pid > 0)
+    else {
         // Родительский процесс
         
-        // Закрываем неиспользуемые концы каналов
-        close(pipe1[0]); // Закрываем чтение из pipe1
-        close(pipe2[1]); // Закрываем запись в pipe2
+        // Закрываем конец pipe для ЧТЕНИЯ, так как родитель только пишет
+        close(pipe1[0]);
         
-        write_string(STDOUT_FILENO, "Enter numbers separated by spaces (type 'exit' to quit):\n");
+        // Вывод инструкций для пользователя
+        write_str(STDOUT_FILENO, "Enter numbers separated by spaces. Type 'exit' to quit:\n");
         
-        char buffer[BUFFER_SIZE];
+        char buffer[1024]; // Буфер для хранения ввода пользователя
         
+        // Основной цикл взаимодействия с пользователем
         while (1) {
-            // Читаем ввод пользователя
-            write_string(STDOUT_FILENO, "> ");
-            bytes_read = read_line(STDIN_FILENO, buffer, BUFFER_SIZE - 1);
-            if (bytes_read <= 0) break;
+            // Вывод приглашения для ввода
+            write_str(STDOUT_FILENO, "> ");
             
-            // Проверяем команду выхода
-            int is_exit = 0;
-            if (bytes_read >= 4) {
-                if (buffer[0] == 'e' && buffer[1] == 'x' && 
-                    buffer[2] == 'i' && buffer[3] == 't') {
-                    is_exit = 1;
-                }
-            }
+            // Чтение ввода пользователя с клавиатуры
+            bytes = read(STDIN_FILENO, buffer, sizeof(buffer) - 1);
+            if (bytes <= 0) break; // Если ошибка чтения или конец ввода - выходим
             
-            if (is_exit) {
-                // Отправляем команду выхода ребенку
-                write(pipe1[1], "exit\n", 5);
-                break;
-            }
+            buffer[bytes] = '\0'; // Завершаем строку нулевым символом
             
-            // Добавляем перевод строки для ребенка
-            buffer[bytes_read] = '\n';
-            buffer[bytes_read + 1] = '\0';
+            // Отправляем введенные данные дочернему процессу через pipe
+            write(pipe1[1], buffer, bytes);
             
-            // Отправляем ребенку через pipe1
-            int bytes_written = write(pipe1[1], buffer, bytes_read + 1);
-            if (bytes_written == -1) {
-                const char* error = "Error: writing to pipe failed\n";
-                write(STDERR_FILENO, error, 33);
-                break;
+            // Проверяем, не ввел ли пользователь команду выхода
+            if (strstr(buffer, "exit") != NULL) {
+                break; // Выходим из цикла если найдено "exit"
             }
         }
         
-        // Очистка
+        // Закрываем конец pipe для записи - это сигнал дочернему процессу о завершении
         close(pipe1[1]);
-        close(pipe2[0]);
         
-        // Ждем завершения дочернего процесса
+        // Ожидаем завершения дочернего процесса
+        // wait приостанавливает выполнение родителя пока ребенок не завершится
         wait(NULL);
-        write_string(STDOUT_FILENO, "Child process finished. Results written to file.\n");
+        
+        // Сообщение об успешном завершении
+        write_str(STDOUT_FILENO, "Program finished. Check the file.\n");
     }
     
-    return 0;
+    return 0; // Успешное завершение программы
 }
