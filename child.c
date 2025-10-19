@@ -1,18 +1,14 @@
 #include <unistd.h>   // Для системных вызовов: read, write, close, STDIN_FILENO, STDERR_FILENO
-#include <fcntl.h>    // Для работы с файлами: open, O_WRONLY, O_CREAT, O_TRUNC
+#include <fcntl.h>
 #include <stdlib.h>   // Для преобразования строк: strtod
-#include <string.h>   // Для работы со строками: strstr
+#include <string.h>   
 
-/**
- * Функция для записи строки в файловый дескриптор
- * @param fd - файловый дескриптор для записи
- * @param str - строка для записи
- */
+
 void write_str(int fd, const char* str) {
     int len = 0;
-    // Ручной подсчет длины строки
-    while (str[len] != '\0') len++;
-    // Запись с помощью системного вызова
+    while (str[len] != '\0') {
+        len++;
+    }
     write(fd, str, len);
 }
 
@@ -32,17 +28,16 @@ void float_to_str(float num, char* buf) {
     }
     
     // Разделение числа на целую и дробную части
-    int integer = (int)num;        // Целая часть (отбрасываем дробную)
-    float fraction = num - integer; // Дробная часть
+    int integer = (int)num;
+    float fraction = num - integer;
     
     // Преобразование ЦЕЛОЙ части числа в строку
     if (integer == 0) {
-        // Если целая часть равна 0, просто записываем '0'
         buf[pos++] = '0';
     } else {
-        char temp[20];  // Временный буфер для цифр в обратном порядке
-        int temp_len = 0; // Длина временного буфера
-        int n = integer;  // Рабочая копия целой части
+        char temp[20];
+        int temp_len = 0;
+        int n = integer;
         
         // Извлекаем цифры числа в ОБРАТНОМ порядке (справа налево)
         while (n > 0) {
@@ -85,10 +80,12 @@ int main(int argc, char* argv[]) {
         return 1; // Завершение с ошибкой
     }
     
-    // Открытие файла для записи результатов
+    
+    
+    int file_fd = open(argv[1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
     // O_WRONLY - только запись, O_CREAT - создать если не существует, O_TRUNC - очистить если существует
     // 0644 - права доступа: владелец читает/пишет, остальные только читают
-    int file_fd = open(argv[1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
     if (file_fd == -1) {
         write_str(STDERR_FILENO, "Error: cannot open output file\n");
         return 1; // Завершение с ошибкой
@@ -114,7 +111,7 @@ int main(int argc, char* argv[]) {
         int count = 0;        // Счетчик найденных чисел
         char* ptr = buffer;   // Указатель на текущую позицию в буфере
         
-        // Обрабатываем строку пока не конец или не заполнен массив чисел
+        // обработка строки 
         while (*ptr != '\0' && count < 100) {
             // Пропускаем пробелы, табуляции и переводы строк
             while (*ptr == ' ' || *ptr == '\t' || *ptr == '\n') ptr++;
@@ -165,7 +162,6 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    // Закрываем файл с результатами
     close(file_fd);
-    return 0; // Успешное завершение
+    return 0;
 }

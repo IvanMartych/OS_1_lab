@@ -8,6 +8,3 @@ add_compile_options(-Wall -Wextra)
 
 add_executable(parent parent.c)
 add_executable(child child.c)
-
-target_include_directories(parent PRIVATE include)
-target_include_directories(child PRIVATE include)
